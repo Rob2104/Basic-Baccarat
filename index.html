@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Basic Baccarat Simulator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @keyframes dealCard {
+            0% { transform: scale(0.8) rotate(-5deg); opacity: 0; }
+            100% { transform: scale(1) rotate(0deg); opacity: 1; }
+        }
+        
+        .card {
+            animation: dealCard 0.5s ease-out forwards;
+            transform-origin: center;
+        }
+        
+        .win-pulse {
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(76, 175, 80, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(76, 175, 80, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(76, 175, 80, 0); }
+        }
+        
+        .chip {
+            transition: all 0.3s ease;
+        }
+        
+        .chip:hover {
+            transform: scale(1.1);
+            filter: brightness(1.1);
+        }
+    </style>
+</head>
+<body class="bg-green-800 text-white min-h-screen flex flex-col">
+    <!-- New Player Setup Form -->
+    <div id="setup-screen" class="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50">
+        <div class="bg-green-900 p-8 rounded-lg w-full max-w-md">
+            <h2 class="text-2xl font-bold mb-6 text-center">Enter Player Info</h2>
+            <div class="mb-4">
+                <label class="block text-sm font-medium mb-2" for="player-name">Your Name:</label>
+                <input type="text" id="player-name" class="w-full px-4 py-2 rounded text-black" placeholder="Rob Jasper">
+            </div>
+            <div class="mb-6">
+                <label class="block text-sm font-medium mb-2" for="initial-balance">Starting Balance ($):</label>
+                <input type="number" id="initial-balance" class="w-full px-4 py-2 rounded text-black" value="1000" min="100">
+            </div>
+            <button id="start-game" class="w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded-lg font-bold">
+                Start Playing
+            </button>
+        </div>
+    </div>
+
+    <div id="game-container" class="container mx-auto px-4 py-8 hidden">
+        <h1 class="text-4xl font-bold text-center mb-2">Baccarat Simulator</h1>
+        <p class="text-center text-green-200 mb-8">Place your bets on Player or Banker and let the cards decide your fate!</p>
+        
+        <div class="game-stats flex justify-between items-center bg-green-900 p-4 rounded-lg mb-8">
+            <div class="text-center">
+                <div class="text-sm font-medium">Player: <span id="player-display" class="text-blue-200"></span></div>
+                <div class="text-xl font-bold">Balance:</div>
+                <div class="text-3xl font-bold" id="balance">1000</div>
+            </div>
+            <div class="text-center">
+                <div class="text-xl font-bold">Current Bet:</div>
+                <div class="text-3xl font-bold" id="currentBet">0</div>
+            </div>
+            <div class="text-center">
+                <div class="text-xl font-bold">Last Win:</div>
+                <div class="text-3xl font-bold" id="lastWin">0</div>
+            </div>
+        </div>
+        
+        <div class="betting-area mb-8">
+            <h2 class="text-2xl font-bold mb-4 text-center">Place Your Bet</h2>
+            <div class="flex justify-center gap-4 mb-4">
+                <button class="chip bg-blue-600 text-white px-6 py-3 rounded-full font-bold transform hover:scale-110" data-amount="10">$10</button>
+                <button class="chip bg-blue-600 text-white px-6 py-3 rounded-full font-bold transform hover:scale-110" data-amount="50">$50</button>
+                <button class="chip bg-blue-600 text-white px-6 py-3 rounded-full font-bold transform hover:scale-110" data-amount="100">$100</button>
+                <button class="chip bg-blue-600 text-white px-6 py-3 rounded-full font-bold transform hover:scale-110" data-amount="500">$500</button>
+            </div>
+            <div class="flex flex-col md:flex-row justify-center gap-8 mb-4">
+                <button id="playerBet" class="bet-btn bg-red-600 text-white px-8 py-6 rounded-lg font-bold text-xl w-full md:w-1/3 relative">
+                    Player (1:1)
+                    <div id="playerChip" class="absolute -top-3 -right-3 w-12 h-12 bg-yellow-500 rounded-full flex items-center justify-center text-black font-bold hidden">$0</div>
+                </button>
+                <button id="tieBet" class="bet-btn bg-gray-600 text-white px-8 py-6 rounded-lg font-bold text-xl w-full md:w-1/3 relative">
+                    Tie (1:8)
+                    <div id="tieChip" class="absolute -top-3 -right-3 w-12 h-12 bg-yellow-500 rounded-full flex items-center justify-center text-black font-bold hidden">$0</div>
+                </button>
+                <button id="bankerBet" class="bet-btn bg-blue-700 text-white px-8 py-6 rounded-lg font-bold text-xl w-full md:w-1/3 relative">
+                    Banker (1:0.95)
+                    <div id="bankerChip" class="absolute -top-3 -right-3 w-12 h-12 bg-yellow-500 rounded-full flex items-center justify-center text-black font-bold hidden">$0</div>
+                </button>
+            </div>
+            <div class="flex justify-center gap-4">
+                <button id="clearBets" class="bg-yellow-600 text-white px-6 py-2 rounded-lg font-bold">Clear Bets</button>
+                <button id="deal" class="bg-green-600 text-white px-6 py-2 rounded-lg font-bold hidden">Deal Cards</button>
+            </div>
+        </div>
+        
+        <div class="game-area hidden bg-gray-900 p-6 rounded-lg mb-8">
+            <div class="flex flex-col md:flex-row justify-between mb-8">
+                <div class="player-area md:w-1/2 text-center mb-8 md:mb-0">
+                    <h3 class="text-2xl font-bold mb-4">
+                        <img src="https://t3.ftcdn.net/jpg/09/39/50/98/360_F_939509839_kHWVHY3mFXpNin4yNqymswhwVl3eHF9d.jpg" alt="silhouette of a person" class="inline-block mr-2" />
+                        Player
+                        <span id="playerBetAmount" class="ml-2 text-yellow-400 text-lg hidden">(Bet: $<span id="playerBetValue">0</span>)</span>
+                    </h3>
+                    <div id="playerCards" class="flex flex-wrap justify-center gap-2 mb-4"></div>
+                    <div class="text-xl font-bold">Score: <span id="playerScore" class="text-2xl">0</span></div>
+                </div>
+                
+                <div class="banker-area md:w-1/2 text-center">
+                    <h3 class="text-2xl font-bold mb-4">
+                        <img src="https://st4.depositphotos.com/8214686/29563/i/450/depositphotos_295636876-stock-photo-the-croupier-in-the-casino.jpg" alt="silhouette of a bank building" class="inline-block mr-2" />
+                        Banker
+                        <span id="bankerBetAmount" class="ml-2 text-yellow-400 text-lg hidden">(Bet: $<span id="bankerBetValue">0</span>)</span>
+                    </h3>
+                    <div id="bankerCards" class="flex flex-wrap justify-center gap-2 mb-4"></div>
+                    <div class="text-xl font-bold">Score: <span id="bankerScore" class="text-2xl">0</span></div>
+                </div>
+            </div>
+            
+            <div id="resultDisplay" class="text-center text-3xl font-bold my-4 hidden"></div>
+            
+            <div class="flex justify-center">
+                <button id="newRound" class="bg-green-600 text-white px-8 py-3 rounded-lg font-bold text-xl hidden">New Round</button>
+            </div>
+        </div>
+    </div>
+    
+    <div class="mt-auto py-4 text-center text-green-200 text-sm relative">
+        Baccarat Simulator - Cards are drawn randomly following standard Baccarat rules
+        <button id="exit-game" class="absolute right-4 bottom-2 bg-red-600 text-white px-4 py-1 rounded-lg font-bold">
+            Exit Game
+        </button>
+    </div>
+    
+    <script>
+        // Game state
+        let playerName = '';
+        let balance = 1000;
+        let currentBet = { player: 0, banker: 0, tie: 0 };
+        let lastWin = 0;
+        
+        // DOM elements
+        const balanceEl = document.getElementById('balance');
+        const currentBetEl = document.getElementById('currentBet');
+        const lastWinEl = document.getElementById('lastWin');
+        const dealBtn = document.getElementById('deal');
+        const newRoundBtn = document.getElementById('newRound');
+        const resultDisplay = document.getElementById('resultDisplay');
+        const gameArea = document.querySelector('.game-area');
+        const bettingArea = document.querySelector('.betting-area');
+        
+        // Initialize the game
+        const setupScreen = document.getElementById('setup-screen');
+        const gameContainer = document.getElementById('game-container');
+        const startButton = document.getElementById('start-game');
+        
+        startButton.addEventListener('click', () => {
+            playerName = document.getElementById('player-name').value.trim();
+            const initialBalance = parseInt(document.getElementById('initial-balance').value);
+            
+            if (!playerName) {
+                alert('Please enter your name');
+                return;
+            }
+            
+            if (initialBalance < 100) {
+                alert('Minimum starting balance is $100');
+                return;
+            }
+            
+            balance = initialBalance;
+            updateUI();
+            
+            setupScreen.classList.add('hidden');
+            gameContainer.classList.remove('hidden');
+            
+            // Update title with player name
+            document.querySelector('h1').textContent = `Welcome, ${playerName}!`;
+        });
+
+        let selectedChip = null;
+        document.querySelectorAll('.chip').forEach(chip => {
+            chip.addEventListener('click', function() {
+                // Clear previous active chip
+                document.querySelectorAll('.chip').forEach(c => {
+                    c.classList.remove('ring-4', 'ring-yellow-400');
+                });
+                
+                // Set this as active chip
+                this.classList.add('ring-4', 'ring-yellow-400');
+                selectedChip = this;
+                
+                const amount = parseInt(this.getAttribute('data-amount'));
+                
+                // Don't allow betting more than the balance
+                if (balance < amount) {
+                    alert("You don't have enough balance to place this bet!");
+                    return;
+                }
+                
+                // Enable the deal button if no bet was placed before
+                if (currentBet.player === 0 && currentBet.banker === 0 && currentBet.tie === 0) {
+                    dealBtn.classList.remove('hidden');
+                }
+            });
+        });
+        
+        // Bet buttons
+        document.getElementById('playerBet').addEventListener('click', function() {
+            placeBet('player');
+        });
+        
+        document.getElementById('bankerBet').addEventListener('click', function() {
+            placeBet('banker');
+        });
+        
+        document.getElementById('tieBet').addEventListener('click', function() {
+            placeBet('tie');
+        });
+        
+        // Clear bets
+        document.getElementById('clearBets').addEventListener('click', function() {
+            currentBet = { player: 0, banker: 0, tie: 0 };
+            updateUI();
+            dealBtn.classList.add('hidden');
+            document.querySelectorAll('.chip').forEach(c => {
+                c.classList.remove('ring-4', 'ring-yellow-400');
+            });
+            selectedChip = null;
+        });
+        
+        // Deal cards
+        dealBtn.addEventListener('click', startGame);
+        newRoundBtn.addEventListener('click', resetGame);
+        
+        function placeBet(type) {
+            if (!selectedChip) {
+                alert('Please select a chip value first!');
+                return;
+            }
+            
+            const amount = parseInt(selectedChip.getAttribute('data-amount'));
+            
+            if (amount <= 0) {
+                alert('Please select a chip value first!');
+                return;
+            }
+            
+            if (balance < amount) {
+                alert("You don't have enough balance to place this bet!");
+                return;
+            }
+            
+            // Update bet
+            currentBet[type] += amount;
+            balance -= amount;
+            
+            // Enable deal button if not already enabled
+            if (!dealBtn.classList.contains('hidden') === false) {
+                dealBtn.classList.remove('hidden');
+            }
+            
+            updateUI();
+        }
+        
+        function updateUI() {
+            document.getElementById('player-display').textContent = playerName;
+            balanceEl.textContent = balance;
+            
+            // Calculate total current bet
+            const totalBet = currentBet.player + currentBet.banker + currentBet.tie;
+            currentBetEl.textContent = totalBet;
+            
+            // Show bet amounts
+            if (currentBet.player > 0) {
+                document.getElementById('playerBetAmount').classList.remove('hidden');
+                document.getElementById('playerBetValue').textContent = currentBet.player;
+                document.getElementById('playerChip').classList.remove('hidden');
+                document.getElementById('playerChip').textContent = `${currentBet.player}`;
+            } else {
+                document.getElementById('playerBetAmount').classList.add('hidden');
+                document.getElementById('playerChip').classList.add('hidden');
+            }
+            
+            if (currentBet.banker > 0) {
+                document.getElementById('bankerBetAmount').classList.remove('hidden');
+                document.getElementById('bankerBetValue').textContent = currentBet.banker;
+                document.getElementById('bankerChip').classList.remove('hidden');
+                document.getElementById('bankerChip').textContent = `${currentBet.banker}`;
+            } else {
+                document.getElementById('bankerBetAmount').classList.add('hidden');
+                document.getElementById('bankerChip').classList.add('hidden');
+            }
+
+            if (currentBet.tie > 0) {
+                document.getElementById('tieChip').classList.remove('hidden');
+                document.getElementById('tieChip').textContent = `${currentBet.tie}`;
+            } else {
+                document.getElementById('tieChip').classList.add('hidden');
+            }
+        }
+        
+        function startGame() {
+            // Hide betting area and show game area
+            bettingArea.classList.add('hidden');
+            gameArea.classList.remove('hidden');
+            dealBtn.classList.add('hidden');
+            
+            // Clear previous cards
+            document.getElementById('playerCards').innerHTML = '';
+            document.getElementById('bankerCards').innerHTML = '';
+            document.getElementById('playerScore').textContent = '0';
+            document.getElementById('bankerScore').textContent = '0';
+            resultDisplay.classList.add('hidden');
+            newRoundBtn.classList.add('hidden');
+            
+            // Standard Baccarat card draw sequence
+            setTimeout(() => drawCard('player', calculateBaccaratScore), 500);
+            setTimeout(() => drawCard('banker', calculateBaccaratScore), 1000);
+            setTimeout(() => drawCard('player', calculateBaccaratScore), 1500);
+            setTimeout(() => drawCard('banker', () => {
+                calculateBaccaratScore();
+                // Check if need third card
+                setTimeout(checkThirdCardRule, 500);
+            }), 2000);
+        }
+        
+        function drawCard(target, callback) {
+            const suits = ['hearts', 'diamonds', 'clubs', 'spades'];
+            const values = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
+            
+            const randomSuit = suits[Math.floor(Math.random() * suits.length)];
+            const randomValue = values[Math.floor(Math.random() * values.length)];
+            
+            const cardDiv = document.createElement('div');
+            cardDiv.className = 'card bg-white text-black w-20 h-28 rounded-lg flex flex-col items-center justify-center shadow-lg';
+            
+            // Color cards based on suit
+            if (randomSuit === 'hearts' || randomSuit === 'diamonds') {
+                cardDiv.classList.add('text-red-600');
+            }
+            
+            cardDiv.innerHTML = `
+                <div class="text-xl font-bold">${randomValue}</div>
+                <div class="text-sm">${randomSuit[0].toUpperCase()}</div>
+            `;
+            
+            document.getElementById(`${target}Cards`).appendChild(cardDiv);
+            
+            // Calculate and update score
+            if (callback) {
+                callback();
+            }
+            
+            // Return card value for scoring
+            return { value: randomValue, suit: randomSuit };
+        }
+        
+        function calculateBaccaratScore() {
+            const calculateHandScore = (hand) => {
+                const cards = hand.querySelectorAll('.card');
+                let score = 0;
+                
+                cards.forEach(card => {
+                    const valueText = card.querySelector('div:first-child').textContent;
+                    let value;
+                    
+                    if (['10', 'J', 'Q', 'K'].includes(valueText)) {
+                        value = 0;
+                    } else if (valueText === 'A') {
+                        value = 1;
+                    } else {
+                        value = parseInt(valueText);
+                    }
+                    
+                    score += value;
+                });
+                
+                return score % 10;
+            };
+            
+            const playerScore = calculateHandScore(document.getElementById('playerCards'));
+            const bankerScore = calculateHandScore(document.getElementById('bankerCards'));
+            
+            document.getElementById('playerScore').textContent = playerScore;
+            document.getElementById('bankerScore').textContent = bankerScore;
+            
+            return { playerScore, bankerScore };
+        }
+        
+        function checkThirdCardRule() {
+            const scores = calculateBaccaratScore();
+            const playerScore = scores.playerScore;
+            const bankerScore = scores.bankerScore;
+            
+            // Natural win (no need for third card)
+            if (playerScore >= 8 || bankerScore >= 8) {
+                showResult();
+                return;
+            }
+            
+            // Player's third card rule
+            let playerDrawsThird = false;
+            if (playerScore <= 5) {
+                playerDrawsThird = true;
+                setTimeout(() => {
+                    drawCard('player', calculateBaccaratScore);
+                    
+                    // After player draws third card, banker decides
+                    setTimeout(() => {
+                        const newScores = calculateBaccaratScore();
+                        checkBankerThirdCardRule(newScores.playerScore, newScores.bankerScore);
+                    }, 500);
+                }, 500);
+            } else {
+                // No player third card, check banker rule
+                checkBankerThirdCardRule(playerScore, bankerScore);
+            }
+        }
+        
+        function checkBankerThirdCardRule(playerScore, bankerScore) {
+            // Banker always stands on 7
+            if (bankerScore >= 7) {
+                showResult();
+                return;
+            }
+            
+            const playerThirdCard = document.getElementById('playerCards').children[2]; // Check if player drew third card
+            const playerDrewThird = !!playerThirdCard;
+            
+            if (!playerDrewThird) {
+                // If player didn't draw third card, banker draws on 0-5
+                if (bankerScore <= 5) {
+                    setTimeout(() => {
+                        drawCard('banker', () => {
+                            calculateBaccaratScore();
+                            setTimeout(showResult, 500);
+                        });
+                    }, 500);
+                } else {
+                    showResult();
+                }
+            } else {
+                // Complex banker drawing rules based on player's third card value
+                const thirdCardValueText = playerThirdCard.querySelector('div:first-child').textContent;
+                let thirdCardValue;
+                
+                if (['10', 'J', 'Q', 'K'].includes(thirdCardValueText)) {
+                    thirdCardValue = 0;
+                } else if (thirdCardValueText === 'A') {
+                    thirdCardValue = 1;
+                } else {
+                    thirdCardValue = parseInt(thirdCardValueText);
+                }
+                
+                let bankerDrawsThird = false;
+                
+                if (bankerScore <= 2) {
+                    bankerDrawsThird = true;
+                } else if (bankerScore === 3 && thirdCardValue !== 8) {
+                    bankerDrawsThird = true;
+                } else if (bankerScore === 4 && [2,3,4,5,6,7].includes(thirdCardValue)) {
+                    bankerDrawsThird = true;
+                } else if (bankerScore === 5 && [4,5,6,7].includes(thirdCardValue)) {
+                    bankerDrawsThird = true;
+                } else if (bankerScore === 6 && [6,7].includes(thirdCardValue)) {
+                    bankerDrawsThird = true;
+                }
+                
+                if (bankerDrawsThird) {
+                    setTimeout(() => {
+                        drawCard('banker', () => {
+                            calculateBaccaratScore();
+                            setTimeout(showResult, 500);
+                        });
+                    }, 500);
+                } else {
+                    showResult();
+                }
+            }
+        }
+        
+        function showResult() {
+            const scores = calculateBaccaratScore();
+            const playerScore = scores.playerScore;
+            const bankerScore = scores.bankerScore;
+            
+            resultDisplay.classList.remove('hidden');
+            newRoundBtn.classList.remove('hidden');
+            
+            let winner = '';
+            if (playerScore > bankerScore) {
+                winner = 'player';
+                resultDisplay.textContent = 'Player Wins!';
+                resultDisplay.className = 'text-center text-3xl font-bold my-4 text-red-500';
+            } else if (bankerScore > playerScore) {
+                winner = 'banker';
+                resultDisplay.textContent = 'Banker Wins!';
+                resultDisplay.className = 'text-center text-3xl font-bold my-4 text-blue-500';
+            } else {
+                winner = 'tie';
+                resultDisplay.textContent = 'Tie!';
+                resultDisplay.className = 'text-center text-3xl font-bold my-4 text-gray-400';
+            }
+            
+            // Payout
+            let winnings = 0;
+            
+            if (winner === 'player' && currentBet.player > 0) {
+                winnings = currentBet.player * 2; // 1:1 payout
+            } else if (winner === 'banker' && currentBet.banker > 0) {
+                winnings = currentBet.banker * 1.95; // 1:0.95 payout (5% commission)
+            } else if (winner === 'tie' && currentBet.tie > 0) {
+                winnings = currentBet.tie * 9; // 8:1 payout
+            }
+            
+            // Special case for tie when player or banker bet
+            if (winner === 'tie') {
+                // Return original bet when tie
+                if (currentBet.player > 0) winnings += currentBet.player;
+                if (currentBet.banker > 0) winnings += currentBet.banker;
+            }
+            
+            // Update balance
+            balance += winnings;
+            lastWin = winnings - (currentBet.player + currentBet.banker + currentBet.tie);
+            
+            if (lastWin > 0) {
+                // Highlight winning area with pulse animation
+                if (winner === 'player') {
+                    document.querySelector('.player-area').classList.add('win-pulse');
+                } else if (winner === 'banker') {
+                    document.querySelector('.banker-area').classList.add('win-pulse');
+                } else {
+                    document.querySelectorAll('.player-area, .banker-area').forEach(el => el.classList.add('win-pulse'));
+                }
+            }
+            
+            updateUI();
+            lastWinEl.textContent = lastWin > 0 ? `+${lastWin}` : lastWin;
+            lastWinEl.className = `text-3xl font-bold ${lastWin > 0 ? 'text-green-400' : 'text-red-400'}`;
+        }
+        
+        function resetGame() {
+            // Remove win animations
+            document.querySelectorAll('.win-pulse').forEach(el => el.classList.remove('win-pulse'));
+            
+            // Reset current bets
+            currentBet = { player: 0, banker: 0, tie: 0 };
+            
+            // Show betting area and hide game area
+            bettingArea.classList.remove('hidden');
+            gameArea.classList.add('hidden');
+            
+            updateUI();
+        }
+
+        // Exit game functionality
+        document.getElementById('exit-game').addEventListener('click', () => {
+            if(confirm('Are you sure you want to exit the game? Any current bet will be lost.')) {
+                gameContainer.classList.add('hidden');
+                setupScreen.classList.remove('hidden');
+                // Reset game state 
+                currentBet = { player: 0, banker: 0, tie: 0 };
+                document.getElementById('player-name').value = '';
+                document.getElementById('initial-balance').value = '1000';
+            }
+        });
+    </script>
+</body>
+</html>
